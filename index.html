@@ -1,0 +1,161 @@
+<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<title>ドラゴンクエストウォークおみやげ周辺スポットマップ</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v7.1.0/ol.css">
+<script src="https://cdn.jsdelivr.net/npm/ol@v7.1.0/dist/ol.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/geolib@3.3.3/lib/index.min.js"></script>
+</head><body>
+<h1 id=title></h1>
+<span>
+  おみやげ<select id="souvenir-select"></select>
+  スポット表示範囲<input type="range" min="1" max="20" value="10" id="show-spot-range"></input><span id="show-spot-range-value">10</span>km
+</span>
+<div id="olmap" style="width:auto;height:600px;"></div>
+<div id="popup" class="ol-popup">
+  <div id="popup-content"></div>
+</div>
+<hr />
+<p>DATA: <a href="https://code4fukui.github.io/fukui-spot/fuku-e-spot.csv" target="_blank">福井県公式観光サイト ふくいドットコム スポット</a></p>
+<p>src: <a href="https://github.com/EiichiMiyagawa/dq-walk-souvenir-around-map" target="_blank">https://github.com/EiichiMiyagawa/dq-walk-souvenir-around-map</a></p>
+<p><a target="_blank" href="https://icons8.com/icon/OBmVbH2qOGwK/%E3%83%9E%E3%83%BC%E3%82%AB%E3%83%BC">マーカー</a> icon by <a target="_blank" href="https://icons8.com">Icons8</a></p>
+<p><a target="_blank" href="https://icons8.com/icon/13140/%E5%8C%85%E8%A3%85">包装</a> icon by <a target="_blank" href="https://icons8.com">Icons8</a></p>
+<p>(C)2019 SQUARE ENIX CO., LTD. All Rights Reserved.</p>
+<p>当サイト上で使用しているゲーム内容の著作権および商標権、その他知的財産権は、当該コンテンツの提供元に帰属します。</p>
+
+<script type="module">
+  import { OLMap } from "https://eiichimiyagawa.github.io/OLMap/v1/OLMap.js";
+  import { CSV } from "https://js.sabae.cc/CSV.js";
+
+  // iOS14以前に関する対応（top-level await未対応のため）
+  onload = async() => {
+    title.textContent = document.title;
+
+    const map = new OLMap({
+      zoom: 9,
+    });
+
+    const data = await CSV.fetch("./data.csv");
+    const souvenirs = await CSV.toJSON(data);
+
+    const data2 = await CSV.fetch("https://code4fukui.github.io/fukui-spot/fuku-e-spot.csv");
+    const spots = await CSV.toJSON(data2);
+
+    map.addVectorLayer("marker");
+    const layer = map.getLayer("marker");
+
+    spots.forEach((spot) => {
+      map.addMarker(layer, {
+        longitude: Number(spot["lng"]),
+        latitude: Number(spot["lat"]),
+        content: `<p><a href="${spot["url"]}" target="_blank">${spot["name"]}</a></p><p>${spot["kana"]}</p>`,
+        icon: "./image/icon_spot.png",
+        type: "spot"
+      });
+    });
+
+    const onChangeSouvenirSelect = (event) => {
+      const pos = event.target.value.split(",");
+      map.setCenter(map.transform(pos[0], pos[1]));
+    };
+
+    const souvenirSelectElement = document.getElementById("souvenir-select");
+    souvenirSelectElement.onchange = onChangeSouvenirSelect;
+    souvenirs.forEach((souvenir) => {
+      const option = document.createElement("option");
+      option.textContent = souvenir["お土産"];
+      option.value = [souvenir["経度"], souvenir["緯度"]];
+      souvenirSelectElement.append(option);
+
+      map.addMarker(layer, {
+        longitude: Number(souvenir["経度"]),
+        latitude: Number(souvenir["緯度"]),
+        content: `<p>${souvenir["お土産"]}</p><p>場所：${souvenir["場所"]}</p>`,
+        icon: "./image/icon.png"
+      });
+    });
+
+    const changeShowSpots = (range) => {
+      layer.getSource().getFeatures().forEach((feature) => {
+        if (feature.get("type") !== "spot") {
+          return;
+        }
+
+        let hidden = true;
+        for (let souvenir of souvenirs) {
+          const coordinate = map.getCoordinateFromFeature(feature);
+          const distance = geolib.getDistance({
+            latitude: souvenir["緯度"],
+            longitude: souvenir["経度"]
+          },
+          {
+            latitude: coordinate[1],
+            longitude: coordinate[0]
+          });
+          if (distance <= range * 1000) {
+            hidden = false;
+            break;
+          }
+        };
+
+        const opacity = hidden ? 0.0 : 1.0;
+        feature.getStyle().getImage().setOpacity(opacity); 
+      });
+      layer.changed();
+    };
+
+    const showSpotRangeValueElement = document.getElementById("show-spot-range-value");
+    const onInputShowSpotRange = (event) => {
+      showSpotRangeValueElement.textContent = event.target.value;
+      changeShowSpots(event.target.value);
+    };
+
+    const showSpotRangeElement = document.getElementById("show-spot-range");
+    showSpotRangeElement.oninput = onInputShowSpotRange;
+    changeShowSpots(showSpotRangeValueElement.textContent);
+  }
+</script>
+
+<style>
+  body {
+    text-align: center;
+    font-family: sans-serif;
+  }
+
+  textarea {
+    width: 70vw;
+    height: 8em;
+  }
+
+  .ol-popup {
+    position: absolute;
+    background-color: white;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+    padding: 15px;
+    border-radius: 10px;
+    border: 1px solid #cccccc;
+    bottom: 12px;
+    left: -50px;
+    min-width: 280px;
+  }
+  .ol-popup:after, .ol-popup:before {
+    top: 100%;
+    border: solid transparent;
+    content: " ";
+    height: 0;
+    width: 0;
+    position: absolute;
+    pointer-events: none;
+  }
+  .ol-popup:after {
+    border-top-color: white;
+    border-width: 10px;
+    left: 48px;
+    margin-left: -10px;
+  }
+  .ol-popup:before {
+    border-top-color: #cccccc;
+    border-width: 11px;
+    left: 48px;
+    margin-left: -11px;
+  }
+</style>
+
