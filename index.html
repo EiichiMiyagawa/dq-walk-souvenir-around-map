@@ -48,7 +48,7 @@
         latitude: Number(spot["lat"]),
         content: `<p><a href="${spot["url"]}" target="_blank">${spot["name"]}</a></p><p>${spot["kana"]}</p>`,
         icon: "./image/icon_spot.png",
-        type: "spot"
+        tag: "spot"
       });
     });
 
@@ -75,7 +75,7 @@
 
     const changeShowSpots = (range) => {
       layer.getSource().getFeatures().forEach((feature) => {
-        if (feature.get("type") !== "spot") {
+        if (feature.get("tag") !== "spot") {
           return;
         }
 
